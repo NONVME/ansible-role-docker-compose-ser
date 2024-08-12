@@ -1,0 +1,33 @@
+---
+- name: Create temp docker-compose directory
+  ansible.builtin.file:
+    path: /tmp/docker-compose/
+    state: directory
+
+- name: Copy Docker Compose files
+  copy:
+    src: "./docker-compose/{{ item }}"
+    dest: "/tmp/docker-compose/{{ item }}"
+  loop: "{{ docker_compose_files }}"
+
+- name: copy env files
+  template:
+    src: "./docker-compose/.env.j2"
+    dest: "/tmp/docker-compose/.env"
+
+- block:
+    - name: Build and run services
+      community.docker.docker_compose_v2:
+        project_src: /tmp/docker-compose
+        files: "{{ item }}"
+        state: present
+      loop: "{{ docker_compose_files }}"
+  rescue:
+    - name: Logging
+      debug:
+        msg: "Error when docker compose up"
+  always:
+    - name: Cleanup temporary files
+      file:
+        path: "/tmp/docker-compose"
+        state: absent
