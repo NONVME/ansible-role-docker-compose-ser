@@ -1,27 +1,34 @@
 ---
-- name: Create temp docker-compose directory
+- name: Create docker-compose directory
   ansible.builtin.file:
-    path: /tmp/docker-compose/
+    path: "{{ apps_dir }}/docker-compose/"
     state: directory
 
-- name: Copy Docker Compose files
+- name: Copy project dir
   copy:
-    src: "./docker-compose/{{ item }}"
-    dest: "/tmp/docker-compose/{{ item }}"
-  loop: "{{ docker_compose_files }}"
+    src: "./docker-compose/{{ service_dir }}"
+    dest: "{{ apps_dir }}/docker-compose/"
 
-- name: copy env files
+- name: Check if .env.j2 file exists
+  stat:
+    path: "./docker-compose/{{ service_dir }}/compose/.env.j2"
+  register: env_file_stat
+  delegate_to: localhost
+  become: false
+
+- name: Fill in template env files
   template:
-    src: "./docker-compose/.env.j2"
-    dest: "/tmp/docker-compose/.env"
+    src: "./docker-compose/{{ service_dir }}/compose/.env.j2"
+    dest: "{{ apps_dir }}/docker-compose/{{ service_dir }}/compose/.env"
+  when: env_file_stat.stat.exists
 
 - block:
     - name: Build and run services
       community.docker.docker_compose_v2:
-        project_src: /tmp/docker-compose
-        files: "{{ item }}"
+        project_src: "{{ apps_dir }}/docker-compose/{{ service_dir }}/compose"
+        files: "compose.yml"
         state: present
-      loop: "{{ docker_compose_files }}"
+
   rescue:
     - name: Logging
       debug:
@@ -29,5 +36,10 @@
   always:
     - name: Cleanup temporary files
       file:
-        path: "/tmp/docker-compose"
+        path: "{{ apps_dir }}/docker-compose/{{ service_dir }}/compose/.env"
         state: absent
+    - name: Cleanup temporary files
+      file:
+        path: "{{ apps_dir }}/docker-compose/{{ service_dir }}/compose/.env.j2"
+        state: absent
+
